@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+
+		<!-- Always force latest IE rendering engine (even in intranet) & Chrome Frame
+		Remove this if you use the .htaccess -->
+		<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+
+		<title>Deaths due to Legal Intervention</title>
+		<meta name="description" content="">
+		<meta name="author" content="Cody Deckard">
+
+		<meta name="viewport" content="width=device-width; initial-scale=1.0">
+
+		<!-- Replace favicon.ico & apple-touch-icon.png in the root of your domain and delete these references -->
+		<link rel="shortcut icon" href="/favicon.ico">
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+		<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+		<script src="http://d3js.org/topojson.v1.min.js"></script>
+		<style>
+			
+			.state {
+				
+				fill:none;
+				stroke:black;
+				
+			}
+		
+			
+			.q4 {fill:rgb(127,201,127);}
+			.q3 {fill:rgb(190,174,212);}
+			.q2 {fill:rgb(253,192,134);}
+			.q1 {fill:rgb(255,255,153);}
+			.q0 {fill:rgb(56,108,176);}
+			
+			.noData{fill:rgba(0,0,0,0.4);}
+			
+			.refTemp {
+				fill:#d3d3d3;
+				stroke: grey;
+				stroke-dash-array: 5,5;
+				
+			}
+			
+			
+			.title-text {
+				
+				text-anchor:middle;
+				font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+				font-size: 30px;
+				fill: #000;
+				pointer-event:none;
+				font-weight:bolder;
+				
+			}
+			
+			#legend {
+			
+				background-color:#D3D3D3;
+				width:auto;
+				height:auto;
+			}
+			
+			
+			#legend.hidden {
+				
+				display:none;
+			}
+			
+			.Legendtext{
+				margin: 0;
+				font-family: sans-serif;
+				font-size: 10px;
+				line-height: 15px;
+				color: black;
+				text-anchor: start;
+			}
+			
+			#rect1,#rect2,#rect3,#rect4,#rect5 {
+				
+				fill:none;
+				position:relative;
+				height:10px;
+				width:10px;
+				
+			}
+			
+			div {
+				position:absolute;
+				padding:10px;
+				-webkit-border-radius: 10px;
+				-moz-border-radius: 10px;
+				border-radius: 10px;
+				-webkit-box-shadow: 4px 4px 10px rgba(0,0,0,0.4);
+				-moz-box-shadow: 4px 4px 10px rgba(0,0,0,0.4);
+				box-shadow: 4px 4px 10px rgba(0,0,0,0.4);
+				pointer-events:none; 
+			}
+			
+			#addInfo {
+				
+				background-color:black;
+			}
+			
+			#addInfo p {
+				
+				margin: 0;
+				font-family: sans-serif;
+				font-size: 10px;
+				line-height: 15px;
+				color: white;
+			}
+			
+			#addInfoTitle {
+				
+				font-weight:bold;
+				text-align: center;
+				margin-left: auto;
+				margin-right:auto;
+				font-size: 14px;
+				display:table;
+			}
+			
+			.refTemp:hover {
+				
+				opacity: 0.2;
+			}
+			
+			path[name]:hover {
+				
+				opacity: 0.2;
+			}
+			
+			
+		</style>
+	</head>
+
+	<body>
+		<div id="tooltip" class="hidden">
+			<P><strong>State</strong>: <span id="stateName">initial Data</span>
+			<P><strong>Race</strong>: <span id="raceID">initial data</span>
+			<P><strong>Percent Difference</strong>: <span id="percent">initial data</span>
+			
+		</div>
+		
+		<div id="legend" class="hidden">
+			
+		</div>
+		<div id="addInfo">
+			<P><span id="addInfoTitle" align="center">State Info</span></P>
+			<hr>
+			<P><span id="race1">&nbsp;</span> <span id="per1">&nbsp;</span></p>
+			<P><span id="race2">&nbsp;</span> <span id="per2">&nbsp;</span></P>
+			<P><span id="race3">&nbsp;</span> <span id="per3">&nbsp;</span></P>
+		</div>
+		<script>
+			// ************************************************
+			//
+			// Centers for Disease Control and Prevention, National Center for Health Statistics. Underlying Cause of 
+			// Death 1999-2012 on CDC WONDER Online Database, released 2014. Data are from the Multiple Cause of Death 
+			// Files, 1999-2012, as compiled from data provided by the 57 vital statistics jurisdictions through the 
+			// Vital Statistics Cooperative Program. Accessed at http://wonder.cdc.gov/ucd-icd10.html on Jan 3, 2015 
+			// 3:34:32 PM 
+			//
+			//
+			//
+			//
+			//
+			// ************************************************
+			
+			
+			//initial variables
+			
+			var width = 1200,
+				height = 960,
+				scale = 1500,
+				padding = 10,
+				angle = 0.9,
+				dX = 10,
+				dY = 10,
+				addInfoActive = false;
+			
+			//Create SVG	
+			var svg = d3.select("body").append("svg").attr("width",width).attr("height",height);
+			
+			svg.append("rect").attr("width",width)
+				.attr("height",height).attr("rx",20).attr("ry",20)
+				.attr("style","fill:white");
+			
+			//Main Title
+			svg.append("text").attr("x",width/2).attr("y",40).attr("class","title-text")
+			.text("Deaths Due to Legal Intervention, 2000-2012");
+			
+			
+			//Albers projection / path
+			var projection = d3.geo.albersUsa().translate([width/2,height/2]).scale(scale);
+			
+			var path = d3.geo.path().projection(projection);
+			
+			var scaleIt = d3.scale.linear().domain([0,2]).range([angle,0.1]);
+			
+			var colorScale = d3.scale.quantize().domain([1,5]).range(d3.range(5).map(function(i){
+				
+				return "q" + i;
+				
+			}));
+			
+			var niceNumbers = d3.format(".2%");
+			
+			var raceKey = [
+							"Black or African American",
+							"American Indian or Alaska Native",
+							"White Hispanic or Latino",
+							"Asian or Pacific Islander",
+							"White Not Hispanic or Latin"
+						];
+			
+			var raceKeyFunc = d3.scale.quantize().domain([1,5]).range(d3.range(5).map(function(i){
+				
+				return raceKey[i];
+				
+			}));
+			
+			d3.json("json/final.json", function(error,us){
+				
+				if(error) {return console.log(error);}
+				
+				var states = topojson.feature(us, us.objects.us);
+				
+				//create a reference for viewer
+				
+				svg.selectAll("path").data(states.features).enter().append("path").attr("class", "refTemp").attr("d",path)
+					.on("mouseover", function(d){
+						/*
+						var xPOS = parseFloat(d3.mouse(this)[0])+dX,
+							yPOS = parseFloat(d3.mouse(this)[1])+dY;
+							
+						
+						
+						
+						d3.select("#raceID").text(d.properties.RACE1? raceKeyFunc(d.properties.RACE1):"No Data");
+						d3.select("#stateName").text(d.properties.NAME);
+						d3.select("#percent")
+							.text(isNaN(d.properties.PER1)? "No Data": niceNumbers(d.properties.PER1));
+						d3.select("#tooltip").style("top",yPOS+"px").style("left",xPOS+"px").classed("hidden",false);
+						
+						*/
+						//update the additional info
+						
+						d3.select("#addInfoTitle").text(d.properties.NAME);
+						for(var i=1; i<4;i++) {
+							
+							var race, per;
+							
+							if (i%2==0) {
+								
+								race = (i==2) ? d.properties.RACE2 : d.properties.RACE4;
+								
+								per = (i==2) ? d.properties.PER2 : d.properties.PER4; 	
+								
+							} else {
+								
+								race = (i==1) ? d.properties.RACE1 : d.properties.RACE3;
+								per = (i==1) ? d.properties.PER1 : d.properties.PER3;
+								
+							}
+							
+							
+							d3.select("#race" + i).text(race? raceKeyFunc(race): "No Data")
+								.style("opacity", (per == 0 || isNaN(per)) ? 0:1);
+							d3.select("#per" + i).text(niceNumbers(per))
+								.style("opacity", (per == 0 || isNaN(per)) ? 0:1);
+							
+						}
+						
+						
+					}).on("mouseout",function(d){
+						
+						d3.select("#tooltip").classed("hidden", true);
+						
+					});
+				
+				
+				
+				
+				
+				svg.append("g").attr("class", "state").selectAll("path").data(states.features).enter()
+					.append("path").attr("d",path)
+					.attr("transform", function(d){
+						
+						var scale = d.properties.PER1? scaleIt(d.properties.PER1): 1;
+						
+						var center = path.centroid(d),
+						x = center[0],
+						y = center[1];
+						
+						return "translate(" +x+"," + y+ ")" +"scale("+scale+")" + 
+							"translate("+ -x+"," + -y +")";
+						
+						
+						
+					})
+					.attr("class", function(d){
+						
+						if (d.properties.RACE1) {
+							return colorScale(d.properties.RACE1);
+						} else {
+							return "noData";
+						}
+						
+					}).on("mouseover", function(d){
+						/*
+						var xPOS = parseFloat(d3.mouse(this)[0])+dX,
+							yPOS = parseFloat(d3.mouse(this)[1])+dY;
+							
+						
+						
+						
+						d3.select("#raceID").text(d.properties.RACE1? raceKeyFunc(d.properties.RACE1):"No Data");
+						d3.select("#stateName").text(d.properties.NAME);
+						d3.select("#percent")
+							.text(isNaN(d.properties.PER1)? "No Data":niceNumbers(d.properties.PER1));
+						d3.select("#tooltip").style("top",yPOS+"px").style("left",xPOS+"px").classed("hidden",false);
+						*/
+						
+						//update additional info
+						d3.select("#addInfoTitle").text(d.properties.NAME);
+						
+						
+						for(var i=1; i<4;i++) {
+							
+							var race, per;
+							
+							if (i%2==0) {
+								
+								race = (i==2) ? d.properties.RACE2 : d.properties.RACE4;
+								
+								per = (i==2) ? d.properties.PER2 : d.properties.PER4; 	
+								
+							} else {
+								
+								race = (i==1) ? d.properties.RACE1 : d.properties.RACE3;
+								per = (i==1) ? d.properties.PER1 : d.properties.PER3;
+								
+							}
+							
+							
+							d3.select("#race" + i).text(race? raceKeyFunc(race): "No Data")
+								.style("opacity", (per == 0 || isNaN(per)) ? 0:1);
+							d3.select("#per" + i).text(niceNumbers(per))
+								.style("opacity", (per == 0 || isNaN(per)) ? 0:1);
+								
+							}
+						
+					}).on("mouseup", function(d){
+						//update div data
+						//alert("You clicked on " + d.properties.NAME);
+						
+						toggleVis();
+						
+						
+					}).attr("name",function(d){
+						
+						return d.properties.NAME;
+						 
+					});
+				
+				
+				
+			});
+			
+			
+			
+			//Create the Legend
+			var i;
+			var boxLength = 15;
+			var svg2 = d3.select("#legend").append("svg").attr("width", 200).attr("height", 5*boxLength+(padding*6));
+			for(i=1;i<=5;i++) {
+				svg2.append("rect").attr("width",boxLength).attr("height",boxLength)
+					.attr("x",0).attr("y",i  * (boxLength+padding/2)).attr("class", colorScale(i));
+				svg2.append("text").attr("x",boxLength).attr("y", i * (boxLength+ padding/2))
+					.text(raceKeyFunc(i)).attr("class", "Legendtext").attr("dy",boxLength-2).attr("dx",boxLength);
+				
+			}
+			
+			svg2.append("rect").attr("width", boxLength).attr("height", boxLength)
+				.attr("x",0).attr("y", i*(boxLength+padding/2)).style("fill","grey");
+			
+			svg2.append("text").attr("x",boxLength).attr("y", i * (boxLength+ padding/2))
+					.text("No Data").attr("class", "Legendtext").attr("dy",boxLength-2).attr("dx",boxLength);
+			
+			d3.select("#legend").classed("hidden", false);
+			
+			
+			//additional Info Style
+			d3.select("#addInfo").style("top",100 +"px").style("left", width - 400 + "px")
+				.style("width", 200 + "px").style("height", "auto").style("opacity", 0.7);
+			
+			function toggleVis() {
+				
+				
+				var active = addInfoActive ? false:true;
+						var opacity = active ? 0.7:0;
+						
+						
+						d3.select("#addInfo").transition().duration(1000).style("opacity",opacity);
+						addInfoActive = active;
+			}
+			
+			
+		</script>
+		
+<P><strong>Source</strong>: Centers for Disease Control and Prevention, National Center for Health Statistics. Underlying Cause of Death 1999-2012 on CDC WONDER Online Database, released 2014. Data are from the Multiple Cause of Death Files, 1999-2012, as compiled from data provided by the 57 vital statistics jurisdictions through the Vital Statistics Cooperative Program. Accessed at http://wonder.cdc.gov/ucd-icd10.html on Jan 3, 2015 3:34:32 PM
+<P>
+<strong>Definition</strong>: legal intervention - deaths caused by police and other persons with legal authority to use deadly force, excluding legal executions
+<P><strong>Note</strong>: Percent difference is calculated by determining a death rate, # of deaths divided by population for each race / ethnicity then the percent difference is calculated between this and the death rate for White Not Hispanic or Latin</P>
+<P><strong>Note</strong>: Highest percent difference is visually represented according to the legend.  </P>
+<P><strong>Note</strong>: State size is scaled about the center to visually represent the percent difference. States which are full size have no percent difference as you're comparing the same data.
+<P><strong>Note</strong>: Alabama has the highest percent difference as there was no data to compare to and can be considered an outlier.	
+<P><strong>Note</strong>	: Data are Suppressed when the data meet the criteria for confidentiality constraint
+</P>
+<P><strong>Note</strong>	: Deaths of persons with Hispanic origin "Not Stated" are included in "All" counts and rates, but are not distributed among Hispanic Origin groups, so are not included in the Hispanic Origin specific counts and rates</P>
+<P><strong>Note</strong>	: Information included on the death certificate about the race and Hispanic ethnicity of the decedent is reported by the funeral director as provided by an informant, often the surviving next of kin, or, in the absence of an informant, on the basis of observation. Race and ethnicity information from the census is by self-report. To the extent that race and Hispanic origin are inconsistent between these two data sources, death rates will be biased.</P>	
+<P><strong>Note</strong>	: The population figures for year 2012 are bridged-race estimates of the July 1 resident population, from the Vintage 2012 postcensal series released by NCHS on June 13, 2013. The population figures for year 2011 are bridged-race estimates of the July 1 resident population, from the Vintage 2011 postcensal series released by NCHS on July 18, 2012. Population figures for 2010 are April 1 Census counts. The population figures for years 2001 - 2009 are bridged-race estimates of the July 1 resident population, from the revised intercensal county-level 2000 - 2009 series released by NCHS on October 26, 2012. Population figures for 2000 are April 1 Census counts. Population figures for 1999 are from the 1990-1999 intercensal series of July 1 estimates. Population figures for the infant age groups are the number of live births. </P>	
+	
+	</body>
+</html>
